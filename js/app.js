@@ -49,7 +49,7 @@ function renderizarProductos() {
     contenedor.appendChild(card);
   });
 
-  totalProductos.textContent = productos.length;
+  actualizarEstadisticas();
 }
 
 // ===============================
@@ -73,6 +73,17 @@ function editarProducto(id) {
   producto.stock = stockNumero;
 
   actualizarCard(producto);
+  function actualizarCard(producto) {
+  const cardVieja = document.querySelector(`[data-id="${producto.id}"]`);
+  const nuevaCard = crearCard(producto, editarProducto);
+  cardVieja.replaceWith(nuevaCard);
+
+  nuevaCard.classList.add("flash");
+  setTimeout(() => nuevaCard.classList.remove("flash"), 600);
+
+  actualizarEstadisticas(); // 👈 aquí se actualizan los números
+}
+  
 }
 
 // ===============================
@@ -92,6 +103,27 @@ function actualizarCard(producto) {
   setTimeout(() => {
     nuevaCard.classList.remove("flash");
   }, 600);
+}
+// ===============================
+// ESTADÍSTICAS DINÁMICAS
+// ===============================
+function actualizarEstadisticas() {
+  const hoy = new Date();
+
+  const totalProductosEl   = document.getElementById("totalProductos");
+  const stockBajoEl        = document.getElementById("stockBajo");
+  const agotadosEl         = document.getElementById("agotados");
+  const vencidosEl         = document.getElementById("vencidos");
+
+  const total    = productos.length;
+  const stockBajo = productos.filter(p => p.stock > 0 && p.stock < 5).length;
+  const agotados  = productos.filter(p => p.stock === 0).length;
+  const vencidos  = productos.filter(p => new Date(p.fecha_vencimiento) < hoy).length;
+
+  totalProductosEl.textContent = total;
+  stockBajoEl.textContent      = stockBajo;
+  agotadosEl.textContent       = agotados;
+  vencidosEl.textContent       = vencidos;
 }
 
 // ===============================
