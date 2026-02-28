@@ -1,6 +1,8 @@
 // components/card.js
 
-export function crearCard(producto, onEditar) {
+import { activarInlineEditing } from "../js/inlineEdit.js";
+
+export function crearCard(producto, onEditar, onActualizar) {
 
   const card = document.createElement("div");
   card.className = "bg-white rounded-xl shadow p-4 transition-all duration-300";
@@ -9,6 +11,7 @@ export function crearCard(producto, onEditar) {
   card.innerHTML = `
     <div class="flex justify-between items-center mb-2">
       <span class="badge text-xs px-2 py-1 rounded-full"></span>
+      <span class="text-xs text-gray-300 select-none">✎ doble clic para editar</span>
     </div>
 
     <img
@@ -16,16 +19,25 @@ export function crearCard(producto, onEditar) {
       class="rounded-lg mb-3 w-full h-40 object-cover"
     />
 
-    <h2 class="font-semibold text-gray-800">${producto.nombre}</h2>
+    <!-- nombre: editable inline -->
+    <h2 class="inline-nombre font-semibold text-gray-800">
+      ${producto.nombre}
+    </h2>
 
     <p class="text-xs text-gray-500">SKU: ${producto.sku}</p>
     <p class="text-sm text-gray-600">Categoría: ${producto.categoria}</p>
 
     <div class="mt-2 text-sm">
-      <p><span class="font-semibold">Stock:</span> 
-        <span class="stock">${producto.stock}</span> unidades
+      <p>
+        <span class="font-semibold">Stock:</span>
+        <!-- stock: editable inline -->
+        <span class="inline-stock stock">${producto.stock}</span> unidades
       </p>
-      <p><span class="font-semibold">Precio:</span> $${producto.precio}</p>
+      <p>
+        <span class="font-semibold">Precio:</span>
+        <!-- precio: editable inline -->
+        <span class="inline-precio">$${producto.precio}</span>
+      </p>
       <p><span class="font-semibold">Vence:</span> ${producto.fecha_vencimiento}</p>
     </div>
 
@@ -41,10 +53,15 @@ export function crearCard(producto, onEditar) {
 
   aplicarReglasDinamicas(card, producto);
 
-  // 👇 Evento editar (CLAVE)
+  // Evento botón Editar → abre modal
   card.querySelector(".btnEditar").addEventListener("click", () => {
     onEditar(producto.id);
   });
+
+  // Activar inline editing si se pasa el callback
+  if (onActualizar) {
+    activarInlineEditing(card, producto, onActualizar);
+  }
 
   return card;
 }
@@ -55,25 +72,21 @@ export function crearCard(producto, onEditar) {
 function aplicarReglasDinamicas(card, producto) {
 
   const btnAccion = card.querySelector(".btnAccion");
-  const badge = card.querySelector(".badge");
+  const badge     = card.querySelector(".badge");
 
-  const hoy = new Date();
+  const hoy             = new Date();
   const fechaVencimiento = new Date(producto.fecha_vencimiento);
 
-  // Limpiar clases previas
   card.classList.remove("border-2", "border-yellow-500", "border-red-500", "opacity-50");
-
   badge.className = "badge text-xs px-2 py-1 rounded-full";
 
-  // 🟢 Normal (por defecto)
+  // 🟢 Normal
   badge.textContent = "Stock Normal";
   badge.classList.add("bg-green-100", "text-green-600");
 
   // 🟡 Stock bajo
   if (producto.stock < 5 && producto.stock > 0) {
-
     card.classList.add("border-2", "border-yellow-500");
-
     badge.textContent = "Stock Bajo";
     badge.classList.remove("bg-green-100", "text-green-600");
     badge.classList.add("bg-yellow-100", "text-yellow-600");
@@ -81,13 +94,10 @@ function aplicarReglasDinamicas(card, producto) {
 
   // 🔴 Agotado
   if (producto.stock === 0) {
-
     card.classList.add("border-2", "border-red-500");
-
     badge.textContent = "Agotado";
     badge.classList.remove("bg-green-100", "text-green-600");
     badge.classList.add("bg-red-100", "text-red-600");
-
     btnAccion.disabled = true;
     btnAccion.classList.add("opacity-50", "cursor-not-allowed");
   }
@@ -95,7 +105,6 @@ function aplicarReglasDinamicas(card, producto) {
   // ⚫ Vencido
   if (fechaVencimiento < hoy) {
     card.classList.add("opacity-50");
-
     badge.textContent = "Vencido";
     badge.classList.remove("bg-green-100", "text-green-600");
     badge.classList.add("bg-gray-200", "text-gray-600");
@@ -103,12 +112,9 @@ function aplicarReglasDinamicas(card, producto) {
 }
 
 // ===============================
-// ANIMACIÓN FLASH (opcional)
+// ANIMACIÓN FLASH
 // ===============================
 export function animarFlash(card) {
   card.classList.add("flash");
-
-  setTimeout(() => {
-    card.classList.remove("flash");
-  }, 600);
+  setTimeout(() => card.classList.remove("flash"), 600);
 }
