@@ -40,17 +40,48 @@ style.textContent = `
   0%   { background-color: #fecaca; }
   100% { background-color: transparent; }
 }
+
+/* Card oculta por filtro */
+.card-oculta {
+  display: none !important;
+}
+
+/* Sin resultados */
+#sinResultados {
+  display: none;
+}
+#sinResultados.visible {
+  display: flex;
+}
 `;
 
 document.head.appendChild(style);
 
-import { productos }        from "./data.js";
-import { crearCard }        from "../components/card.js";
-import { crearModal }       from "../components/modal.js";
-import { patchProductoAPI } from "../services/service.js";
-import { toast }            from "./toast.js";
+import { productos }           from "./data.js";
+import { crearCard }           from "../components/card.js";
+import { crearModal }          from "../components/modal.js";
+import { patchProductoAPI }    from "../services/service.js";
+import { toast }               from "./toast.js";
+import { inicializarFiltros, aplicarFiltros } from "./filtros.js";
 
 const contenedor = document.getElementById("productosContainer");
+
+// ── Placeholder "sin resultados" ─────────────────────────
+const sinResultados = document.createElement("div");
+sinResultados.id = "sinResultados";
+sinResultados.className = [
+  "col-span-full flex-col items-center justify-center",
+  "py-16 text-gray-400 gap-3"
+].join(" ");
+sinResultados.innerHTML = `
+  <svg class="w-12 h-12 opacity-30" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round"
+      d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+  </svg>
+  <p class="text-sm font-medium">Sin resultados para esta búsqueda</p>
+  <p class="text-xs">Intenta con otro nombre, SKU o categoría</p>
+`;
+contenedor.appendChild(sinResultados);
 
 // ── Inicializar modal ────────────────────────────────────
 const modal = crearModal(guardarProducto);
@@ -60,7 +91,60 @@ document.getElementById("btnAgregar").addEventListener("click", () => {
 });
 
 // ===============================
-// GUARDAR DESDE MODAL (nuevo o edición completa)
+// RENDER PRINCIPAL
+// ===============================
+function renderizarProductos() {
+  // Limpiar excepto el placeholder
+  Array.from(contenedor.children).forEach(child => {
+    if (child.id !== "sinResultados") child.remove();
+  });
+
+  productos.forEach(producto => {
+    const card = crearCard(producto, abrirEditar, alActualizarInline);
+    card.classList.add("fade-in");
+    contenedor.insertBefore(card, sinResultados);
+  });
+
+  actualizarEstadisticas();
+
+  // Inicializar filtros DESPUÉS de renderizar
+  // (necesita que el DOM del buscador ya exista)
+  inicializarFiltros(productos, onFiltrosCambian);
+}
+
+// ===============================
+// CALLBACK FILTROS → RE-RENDER VIRTUAL
+// No re-crea las cards, solo muestra/oculta
+// ===============================
+function onFiltrosCambian(productosFiltrados) {
+
+  const idsVisibles = new Set(productosFiltrados.map(p => String(p.id)));
+
+  // Reordenar + mostrar/ocultar
+  productosFiltrados.forEach((producto, i) => {
+    const card = contenedor.querySelector(`[data-id="${producto.id}"]`);
+    if (!card) return;
+    card.classList.remove("card-oculta");
+    card.style.order = i; // CSS order para reordenar sin mover el DOM
+  });
+
+  // Ocultar los que no están en el resultado
+  Array.from(contenedor.querySelectorAll("[data-id]")).forEach(card => {
+    if (!idsVisibles.has(card.dataset.id)) {
+      card.classList.add("card-oculta");
+    }
+  });
+
+  // Mostrar/ocultar placeholder
+  if (productosFiltrados.length === 0) {
+    sinResultados.classList.add("visible");
+  } else {
+    sinResultados.classList.remove("visible");
+  }
+}
+
+// ===============================
+// GUARDAR DESDE MODAL
 // ===============================
 function guardarProducto(producto) {
   try {
@@ -76,6 +160,10 @@ function guardarProducto(producto) {
       toast.exito(`"${producto.nombre}" actualizado correctamente.`);
     }
 
+    // Re-aplicar filtros para incluir/excluir el nuevo producto
+    const resultado = aplicarFiltros(productos);
+    onFiltrosCambian(resultado);
+
     actualizarEstadisticas();
 
   } catch (e) {
@@ -90,15 +178,12 @@ function guardarProducto(producto) {
 async function alActualizarInline(id, campo, nuevoValor, elemento, textoOriginalHTML, valorOriginal) {
 
   const producto = productos.find(p => p.id === id);
-
   elemento.classList.add("inline-guardando");
 
   const ok = await patchProductoAPI(id, campo, nuevoValor);
-
   elemento.classList.remove("inline-guardando");
 
   if (ok) {
-    // ── Éxito ────────────────────────────────────────────
     elemento.classList.add("inline-ok");
     setTimeout(() => elemento.classList.remove("inline-ok"), 800);
 
@@ -110,22 +195,23 @@ async function alActualizarInline(id, campo, nuevoValor, elemento, textoOriginal
       if (card) reaplicarReglas(card, producto);
     }
 
+    // Re-aplicar filtros (el orden puede haber cambiado)
+    const resultado = aplicarFiltros(productos);
+    onFiltrosCambian(resultado);
+
     actualizarEstadisticas();
 
   } else {
-    // ── Fallo: rollback ───────────────────────────────────
     if (producto) producto[campo] = valorOriginal;
-
     elemento.innerHTML = textoOriginalHTML;
     elemento.classList.add("inline-error");
     setTimeout(() => elemento.classList.remove("inline-error"), 800);
-
     toast.error("No se pudo guardar el cambio. Revisa tu conexión.");
   }
 }
 
 // ===============================
-// RE-APLICAR REGLAS VISUALES
+// RE-APLICAR REGLAS VISUALES (inline stock)
 // ===============================
 function reaplicarReglas(card, producto) {
 
@@ -146,7 +232,6 @@ function reaplicarReglas(card, producto) {
     badge.classList.replace("bg-green-100", "bg-yellow-100");
     badge.classList.replace("text-green-600", "text-yellow-600");
   }
-
   if (producto.stock === 0) {
     card.classList.add("border-2", "border-red-500");
     badge.textContent = "Agotado";
@@ -166,20 +251,8 @@ function reaplicarReglas(card, producto) {
 }
 
 // ===============================
-// RENDER PRINCIPAL
+// AGREGAR / ACTUALIZAR CARDS
 // ===============================
-function renderizarProductos() {
-  contenedor.innerHTML = "";
-
-  productos.forEach(producto => {
-    const card = crearCard(producto, abrirEditar, alActualizarInline);
-    card.classList.add("fade-in");
-    contenedor.appendChild(card);
-  });
-
-  actualizarEstadisticas();
-}
-
 function abrirEditar(id) {
   const producto = productos.find(p => p.id === id);
   if (producto) modal.abrirEditar(producto);
@@ -188,14 +261,15 @@ function abrirEditar(id) {
 function agregarCard(producto) {
   const card = crearCard(producto, abrirEditar, alActualizarInline);
   card.classList.add("fade-in");
-  contenedor.appendChild(card);
+  contenedor.insertBefore(card, sinResultados);
 }
 
 function actualizarCard(producto) {
-  const cardVieja = document.querySelector(`[data-id="${producto.id}"]`);
+  const cardVieja = contenedor.querySelector(`[data-id="${producto.id}"]`);
   if (!cardVieja) return;
 
   const nuevaCard = crearCard(producto, abrirEditar, alActualizarInline);
+  nuevaCard.style.order = cardVieja.style.order; // mantener posición
   cardVieja.replaceWith(nuevaCard);
   nuevaCard.classList.add("flash");
   setTimeout(() => nuevaCard.classList.remove("flash"), 600);

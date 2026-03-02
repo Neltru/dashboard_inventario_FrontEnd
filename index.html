@@ -9,7 +9,6 @@
 
 <body class="bg-gray-100 min-h-screen">
 
-  <!-- CONTENEDOR PRINCIPAL -->
   <div class="max-w-7xl mx-auto p-6">
 
     <!-- HEADER -->
@@ -20,8 +19,6 @@
         </h1>
         <p class="text-gray-500 text-sm">Administración de productos</p>
       </div>
-
-      <!-- Botón preparado para evento -->
       <button id="btnAgregar"
         class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow transition">
         + Agregar Producto
@@ -30,87 +27,97 @@
 
     <!-- TARJETAS ESTADÍSTICAS -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-
       <div class="bg-white p-4 rounded-xl shadow">
         <p class="text-gray-500 text-sm">Total Productos</p>
         <h2 id="totalProductos" class="text-2xl font-bold text-gray-800">0</h2>
       </div>
-
       <div class="bg-white p-4 rounded-xl shadow">
         <p class="text-gray-500 text-sm">Stock Bajo</p>
         <h2 id="stockBajo" class="text-2xl font-bold text-yellow-500">0</h2>
       </div>
-
       <div class="bg-white p-4 rounded-xl shadow">
         <p class="text-gray-500 text-sm">Agotados</p>
         <h2 id="agotados" class="text-2xl font-bold text-gray-500">0</h2>
       </div>
-
       <div class="bg-white p-4 rounded-xl shadow">
         <p class="text-gray-500 text-sm">Vencidos</p>
         <h2 id="vencidos" class="text-2xl font-bold text-red-500">0</h2>
       </div>
-
     </div>
 
     <!-- BUSCADOR -->
     <div class="bg-white p-4 rounded-xl shadow mb-6 flex gap-3">
-
       <input
         id="inputBusqueda"
         type="text"
         placeholder="Buscar productos por nombre o SKU..."
         class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
-
-      <button
-        id="btnFiltrar"
+      <button id="btnFiltrar"
         class="border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-100 transition">
-        Filtrar
+        Buscar
       </button>
-
     </div>
 
     <!-- LEYENDA ESTADOS -->
     <div class="bg-white p-4 rounded-xl shadow mb-6">
-      <h3 class="text-sm font-semibold text-gray-600 mb-3">
-        Estados de los productos:
-      </h3>
-
+      <h3 class="text-sm font-semibold text-gray-600 mb-3">Estados de los productos:</h3>
       <div class="flex gap-6 text-sm">
-
         <div class="flex items-center gap-2">
-          <span class="w-3 h-3 bg-green-500 rounded-full"></span>
-          Stock Normal
+          <span class="w-3 h-3 bg-green-500 rounded-full"></span> Stock Normal
         </div>
-
         <div class="flex items-center gap-2">
-          <span class="w-3 h-3 bg-yellow-500 rounded-full"></span>
-          Stock Bajo
+          <span class="w-3 h-3 bg-yellow-500 rounded-full"></span> Stock Bajo
         </div>
-
         <div class="flex items-center gap-2">
-          <span class="w-3 h-3 bg-gray-500 rounded-full"></span>
-          Agotado
+          <span class="w-3 h-3 bg-gray-500 rounded-full"></span> Agotado
         </div>
-
         <div class="flex items-center gap-2">
-          <span class="w-3 h-3 bg-red-500 rounded-full"></span>
-          Vencido
+          <span class="w-3 h-3 bg-red-500 rounded-full"></span> Vencido
         </div>
-
       </div>
     </div>
 
-    <!-- CONTENEDOR DINÁMICO DE PRODUCTOS -->
-    <!-- Aquí se renderizarán desde endpoints -->
+    <!--
+      IMPORTANTE: usar flex + flex-wrap en lugar de grid puro
+      para que CSS `order` funcione y reordene visualmente sin mover el DOM
+    -->
     <div
       id="productosContainer"
-      class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+      class="flex flex-wrap gap-6"
+      style="align-items: start;"
     >
+      <!-- Las cards se insertan aquí con width fijo para imitar el grid -->
     </div>
 
   </div>
+
+  <style>
+    /* Imitar grid de 4 columnas con flex */
+    #productosContainer > [data-id] {
+      flex: 1 1 calc(25% - 1.5rem);
+      min-width: 200px;
+      max-width: calc(25% - 1.5rem);
+    }
+
+    @media (max-width: 1024px) {
+      #productosContainer > [data-id] {
+        flex: 1 1 calc(50% - 1.5rem);
+        max-width: calc(50% - 1.5rem);
+      }
+    }
+
+    @media (max-width: 640px) {
+      #productosContainer > [data-id] {
+        flex: 1 1 100%;
+        max-width: 100%;
+      }
+    }
+
+    #sinResultados {
+      flex: 1 1 100%;
+    }
+  </style>
 
   <script type="module" src="./js/app.js"></script>
 </body>
