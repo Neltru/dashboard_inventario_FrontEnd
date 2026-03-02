@@ -4,204 +4,251 @@
 // INYECTAR ANIMACIONES CSS
 // ===============================
 const style = document.createElement("style");
-
 style.textContent = `
-.flash {
-  animation: flashEffect 0.6s ease;
-}
+.flash { animation: flashEffect 0.6s ease; }
 @keyframes flashEffect {
   0%   { background-color: #bfdbfe; }
   100% { background-color: transparent; }
 }
-
 .fade-in {
-  opacity: 0;
-  transform: translateY(10px);
+  opacity: 0; transform: translateY(10px);
   animation: fadeInEffect 0.5s ease forwards;
 }
-@keyframes fadeInEffect {
-  to { opacity: 1; transform: translateY(0); }
-}
-
+@keyframes fadeInEffect { to { opacity: 1; transform: translateY(0); } }
 .inline-guardando { opacity: 0.4; }
-
-.inline-ok {
-  animation: inlineOk 0.8s ease forwards;
-}
-@keyframes inlineOk {
-  0%   { background-color: #bbf7d0; }
-  100% { background-color: transparent; }
-}
-
-.inline-error {
-  animation: inlineError 0.8s ease forwards;
-}
-@keyframes inlineError {
-  0%   { background-color: #fecaca; }
-  100% { background-color: transparent; }
-}
-
-/* Card oculta por filtro */
-.card-oculta {
-  display: none !important;
-}
-
-/* Sin resultados */
-#sinResultados {
-  display: none;
-}
-#sinResultados.visible {
-  display: flex;
-}
+.inline-ok   { animation: inlineOk   0.8s ease forwards; }
+.inline-error{ animation: inlineError 0.8s ease forwards; }
+@keyframes inlineOk   { 0% { background-color: #bbf7d0; } 100% { background-color: transparent; } }
+@keyframes inlineError{ 0% { background-color: #fecaca; } 100% { background-color: transparent; } }
+.card-oculta { display: none !important; }
+#sinResultados { display: none; }
+#sinResultados.visible { display: flex; }
+.stat-update { animation: statPop 0.4s ease; }
+@keyframes statPop { 0%{transform:scale(1)} 50%{transform:scale(1.15)} 100%{transform:scale(1)} }
 `;
-
 document.head.appendChild(style);
 
-import { productos }           from "./data.js";
+import { productos as productosLocales } from "./data.js";
 import { crearCard }           from "../components/card.js";
 import { crearModal }          from "../components/modal.js";
-import { patchProductoAPI }    from "../services/service.js";
 import { toast }               from "./toast.js";
 import { inicializarFiltros, aplicarFiltros } from "./filtros.js";
+import { mostrarSkeletons, ocultarSkeletons } from "./skeleton.js";
+import {
+  obtenerProductos,
+  obtenerCategorias,
+  obtenerEstadisticas,
+  crearProducto,
+  editarProducto,
+  patchStockAPI,
+  eliminarProducto,
+} from "../services/service.js";
+
+// Array vivo de productos (se llena desde la API)
+let productos = [];
 
 const contenedor = document.getElementById("productosContainer");
 
-// ── Placeholder "sin resultados" ─────────────────────────
+// ── Placeholder sin resultados ───────────────────────────
 const sinResultados = document.createElement("div");
 sinResultados.id = "sinResultados";
-sinResultados.className = [
-  "col-span-full flex-col items-center justify-center",
-  "py-16 text-gray-400 gap-3"
-].join(" ");
+sinResultados.className = "col-span-full flex-col items-center justify-center py-16 text-gray-400 gap-3";
 sinResultados.innerHTML = `
   <svg class="w-12 h-12 opacity-30" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-    <path stroke-linecap="round" stroke-linejoin="round"
-      d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+    <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
   </svg>
   <p class="text-sm font-medium">Sin resultados para esta búsqueda</p>
   <p class="text-xs">Intenta con otro nombre, SKU o categoría</p>
 `;
 contenedor.appendChild(sinResultados);
 
-// ── Inicializar modal ────────────────────────────────────
+// ── Modal ────────────────────────────────────────────────
 const modal = crearModal(guardarProducto);
+document.getElementById("btnAgregar").addEventListener("click", () => modal.abrirNuevo());
 
-document.getElementById("btnAgregar").addEventListener("click", () => {
-  modal.abrirNuevo();
+// ── Botón Ver Reportes ──────────────────────────────────
+document.getElementById("btnVerReportes").addEventListener("click", () => {
+  window.location.href = "./pages/reportes.html";
 });
 
 // ===============================
 // RENDER PRINCIPAL
 // ===============================
-function renderizarProductos() {
-  // Limpiar excepto el placeholder
-  Array.from(contenedor.children).forEach(child => {
-    if (child.id !== "sinResultados") child.remove();
-  });
+async function renderizarProductos() {
 
-  productos.forEach(producto => {
-    const card = crearCard(producto, abrirEditar, alActualizarInline);
-    card.classList.add("fade-in");
-    contenedor.insertBefore(card, sinResultados);
-  });
+  // 1. Skeletons en productos y stats
+  mostrarSkeletons(contenedor, 4);
+  contenedor.appendChild(sinResultados);
 
-  actualizarEstadisticas();
+  try {
+    // 2. Fetch en paralelo: productos + categorías + estadísticas
+    const [productosAPI, categoriasAPI, statsAPI] = await Promise.allSettled([
+      obtenerProductos(),
+      obtenerCategorias(),
+      obtenerEstadisticas(),
+    ]);
 
-  // Inicializar filtros DESPUÉS de renderizar
-  // (necesita que el DOM del buscador ya exista)
-  inicializarFiltros(productos, onFiltrosCambian);
-}
+    // Usar datos de API si OK, fallback a local si falla
+    const productosData = productosAPI.status === "fulfilled" ? productosAPI.value : null;
+    // Validar que sea array; si es objeto con propiedad 'data', extraerla
+    productos = Array.isArray(productosData)
+      ? productosData
+      : (Array.isArray(productosData?.data) ? productosData.data : productosLocales);
 
-// ===============================
-// CALLBACK FILTROS → RE-RENDER VIRTUAL
-// No re-crea las cards, solo muestra/oculta
-// ===============================
-function onFiltrosCambian(productosFiltrados) {
-
-  const idsVisibles = new Set(productosFiltrados.map(p => String(p.id)));
-
-  // Reordenar + mostrar/ocultar
-  productosFiltrados.forEach((producto, i) => {
-    const card = contenedor.querySelector(`[data-id="${producto.id}"]`);
-    if (!card) return;
-    card.classList.remove("card-oculta");
-    card.style.order = i; // CSS order para reordenar sin mover el DOM
-  });
-
-  // Ocultar los que no están en el resultado
-  Array.from(contenedor.querySelectorAll("[data-id]")).forEach(card => {
-    if (!idsVisibles.has(card.dataset.id)) {
-      card.classList.add("card-oculta");
+    if (productosAPI.status === "rejected") {
+      console.warn("⚠️ GET /api/productos falló, usando data.js local");
     }
-  });
+    
+    if (!Array.isArray(productos)) {
+      console.warn("⚠️ Respuesta de API no es un array, usando data.js local");
+      productos = productosLocales;
+    }
 
-  // Mostrar/ocultar placeholder
-  if (productosFiltrados.length === 0) {
-    sinResultados.classList.add("visible");
-  } else {
-    sinResultados.classList.remove("visible");
+    // 3. Estadísticas: siempre calcular desde los productos cargados
+    actualizarEstadisticas();
+    revelarStats();
+
+    // 4. Categorías: usar API si OK, extraer del array si falla
+    const categorias = categoriasAPI.status === "fulfilled"
+      ? categoriasAPI.value
+      : [...new Set(productos.map(p => p.categoria))];
+
+    if (categoriasAPI.status === "rejected") {
+      console.warn("⚠️ GET /api/categorias falló, extrayendo del array");
+    }
+
+    // 5. Ocultar skeletons y renderizar cards
+    ocultarSkeletons(contenedor);
+
+    productos.forEach(producto => {
+      const card = crearCard(producto, abrirEditar, alActualizarInline, eliminarProductoHandler);
+      card.classList.add("fade-in");
+      contenedor.insertBefore(card, sinResultados);
+    });
+
+    // 6. Filtros con categorías reales
+    inicializarFiltros(productos, categorias, onFiltrosCambian);
+
+  } catch (err) {
+    // Error inesperado — fallback total
+    console.error("Error crítico al cargar:", err);
+    ocultarSkeletons(contenedor);
+    productos = productosLocales;
+    productos.forEach(p => {
+      const card = crearCard(p, abrirEditar, alActualizarInline);
+      contenedor.insertBefore(card, sinResultados);
+    });
+    actualizarEstadisticas();
+    revelarStats();
+    inicializarFiltros(productos, [...new Set(productos.map(p => p.categoria))], onFiltrosCambian);
+    toast.advertencia("No se pudo conectar a la API. Mostrando datos locales.");
   }
 }
 
 // ===============================
-// GUARDAR DESDE MODAL
+// GUARDAR (POST o PUT según si tiene id)
 // ===============================
-function guardarProducto(producto) {
+async function guardarProducto(producto) {
   try {
+    let productoGuardado;
+
     if (producto.id === null) {
-      producto.id = Date.now();
-      productos.push(producto);
-      agregarCard(producto);
-      toast.exito(`"${producto.nombre}" agregado correctamente.`);
+      // ── POST /api/productos ───────────────────────────
+      productoGuardado = await crearProducto(producto);
+      productos.push(productoGuardado);
+      agregarCard(productoGuardado);
+      toast.exito(`"${productoGuardado.nombre}" agregado correctamente.`);
+
     } else {
-      const idx = productos.findIndex(p => p.id === producto.id);
-      if (idx !== -1) productos[idx] = producto;
-      actualizarCard(producto);
-      toast.exito(`"${producto.nombre}" actualizado correctamente.`);
+      // ── PUT /api/productos/:id ────────────────────────
+      productoGuardado = await editarProducto(producto.id, producto);
+      const idx = productos.findIndex(p => p.id === productoGuardado.id);
+      if (idx !== -1) productos[idx] = productoGuardado;
+      actualizarCard(productoGuardado);
+      toast.exito(`"${productoGuardado.nombre}" actualizado correctamente.`);
     }
 
-    // Re-aplicar filtros para incluir/excluir el nuevo producto
     const resultado = aplicarFiltros(productos);
     onFiltrosCambian(resultado);
-
     actualizarEstadisticas();
 
-  } catch (e) {
-    console.error(e);
-    toast.error("Ocurrió un error al guardar el producto.");
+  } catch (err) {
+    console.error("Error al guardar:", err);
+    toast.error("No se pudo guardar el producto. Revisa tu conexión.");
   }
 }
 
 // ===============================
-// CALLBACK INLINE EDIT → PATCH
+// ELIMINAR PRODUCTO
 // ===============================
-async function alActualizarInline(id, campo, nuevoValor, elemento, textoOriginalHTML, valorOriginal) {
+export async function eliminarProductoHandler(id) {
+  const producto = productos.find(p => p.id === id);
+  if (!producto) return;
+
+  try {
+    // ── DELETE /api/productos/:id ─────────────────────
+    await eliminarProducto(id);
+
+    // Quitar del array y del DOM
+    productos = productos.filter(p => p.id !== id);
+    const card = contenedor.querySelector(`[data-id="${id}"]`);
+    if (card) {
+      card.style.transition = "opacity 0.3s, transform 0.3s";
+      card.style.opacity    = "0";
+      card.style.transform  = "scale(0.95)";
+      setTimeout(() => card.remove(), 300);
+    }
+
+    const resultado = aplicarFiltros(productos);
+    onFiltrosCambian(resultado);
+    actualizarEstadisticas();
+    toast.exito(`"${producto.nombre}" eliminado.`);
+
+  } catch (err) {
+    console.error("Error al eliminar:", err);
+    toast.error("No se pudo eliminar el producto.");
+  }
+}
+
+// ===============================
+// CALLBACK INLINE EDIT → PATCH /stock
+// ===============================
+async function alActualizarInline(id, campo, nuevoValor, elemento, textoOriginalHTML, valorOriginal, tieneAPI) {
 
   const producto = productos.find(p => p.id === id);
   elemento.classList.add("inline-guardando");
 
-  const ok = await patchProductoAPI(id, campo, nuevoValor);
-  elemento.classList.remove("inline-guardando");
+  try {
+    if (tieneAPI && campo === "stock") {
+      // ── PATCH /api/productos/:id/stock ───────────────
+      // Pasar stock anterior y nuevo para calcular cantidad y tipo
+      await patchStockAPI(id, parseInt(valorOriginal), parseInt(nuevoValor));
+    }
+    // nombre y precio no tienen endpoint propio:
+    // el cambio queda en memoria hasta que se guarde con PUT desde el modal
 
-  if (ok) {
+    elemento.classList.remove("inline-guardando");
     elemento.classList.add("inline-ok");
     setTimeout(() => elemento.classList.remove("inline-ok"), 800);
 
     const etiquetas = { nombre: "Nombre", precio: "Precio", stock: "Stock" };
-    toast.exito(`${etiquetas[campo] ?? campo} actualizado.`, 2500);
+    const sufijo = tieneAPI ? "" : " (pendiente de guardar con Editar)";
+    toast.exito(`${etiquetas[campo] ?? campo} actualizado.${sufijo}`, 2500);
 
     if (campo === "stock" && producto) {
-      const card = document.querySelector(`[data-id="${id}"]`);
+      const card = contenedor.querySelector(`[data-id="${id}"]`);
       if (card) reaplicarReglas(card, producto);
     }
 
-    // Re-aplicar filtros (el orden puede haber cambiado)
     const resultado = aplicarFiltros(productos);
     onFiltrosCambian(resultado);
-
     actualizarEstadisticas();
 
-  } else {
+  } catch (err) {
+    console.error("Error PATCH:", err);
+    elemento.classList.remove("inline-guardando");
+
+    // Rollback
     if (producto) producto[campo] = valorOriginal;
     elemento.innerHTML = textoOriginalHTML;
     elemento.classList.add("inline-error");
@@ -211,47 +258,69 @@ async function alActualizarInline(id, campo, nuevoValor, elemento, textoOriginal
 }
 
 // ===============================
-// RE-APLICAR REGLAS VISUALES (inline stock)
+// ESTADÍSTICAS DESDE API
 // ===============================
-function reaplicarReglas(card, producto) {
 
-  const badge     = card.querySelector(".badge");
-  const btnAccion = card.querySelector(".btnAccion");
+// ===============================
+// ESTADÍSTICAS CALCULADAS LOCAL (fallback)
+// ===============================
+function actualizarEstadisticas() {
+  const hoy        = new Date();
+  const valorTotal = productos.reduce((acc, p) => {
+    const precio = parseFloat(p.precio) || 0;
+    const stock = parseInt(p.stock) || 0;
+    return acc + (precio * stock);
+  }, 0);
 
-  card.classList.remove("border-2", "border-yellow-500", "border-red-500", "opacity-50");
-  badge.className   = "badge text-xs px-2 py-1 rounded-full";
-  badge.textContent = "Stock Normal";
-  badge.classList.add("bg-green-100", "text-green-600");
+  setStatWithAnimation("totalProductos", productos.length);
+  setStatWithAnimation("stockBajo",  productos.filter(p => p.stock > 0 && p.stock < 5).length);
+  setStatWithAnimation("agotados",   productos.filter(p => p.stock === 0).length);
+  setStatWithAnimation("vencidos",   productos.filter(p => new Date(p.fecha_vencimiento) < hoy).length);
+  setStatWithAnimation("valorTotal", `$${valorTotal.toLocaleString("es-MX")}`);
+}
 
-  btnAccion.disabled = false;
-  btnAccion.classList.remove("opacity-50", "cursor-not-allowed");
 
-  if (producto.stock > 0 && producto.stock < 5) {
-    card.classList.add("border-2", "border-yellow-500");
-    badge.textContent = "Stock Bajo";
-    badge.classList.replace("bg-green-100", "bg-yellow-100");
-    badge.classList.replace("text-green-600", "text-yellow-600");
-  }
-  if (producto.stock === 0) {
-    card.classList.add("border-2", "border-red-500");
-    badge.textContent = "Agotado";
-    badge.classList.replace("bg-green-100", "bg-red-100");
-    badge.classList.replace("text-green-600", "text-red-600");
-    btnAccion.disabled = true;
-    btnAccion.classList.add("opacity-50", "cursor-not-allowed");
-  }
+function setStatWithAnimation(id, valor) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = valor;
+  el.classList.remove("stat-update");
+  void el.offsetWidth;
+  el.classList.add("stat-update");
+}
 
-  const hoy = new Date();
-  if (new Date(producto.fecha_vencimiento) < hoy) {
-    card.classList.add("opacity-50");
-    badge.textContent = "Vencido";
-    badge.classList.replace("bg-green-100", "bg-gray-200");
-    badge.classList.replace("text-green-600", "text-gray-600");
-  }
+// Revelar stat cards (ocultar skeletons de stats)
+function revelarStats() {
+  ["totalProductos","stockBajo","agotados","vencidos","valorTotal"].forEach(id => {
+    const sk = document.getElementById(`${id}-sk`);
+    const el = document.getElementById(id);
+    if (sk) sk.style.display = "none";
+    if (el) el.classList.remove("hidden");
+  });
 }
 
 // ===============================
-// AGREGAR / ACTUALIZAR CARDS
+// FILTROS CALLBACK
+// ===============================
+function onFiltrosCambian(productosFiltrados) {
+  const idsVisibles = new Set(productosFiltrados.map(p => String(p.id)));
+
+  productosFiltrados.forEach((producto, i) => {
+    const card = contenedor.querySelector(`[data-id="${producto.id}"]`);
+    if (!card) return;
+    card.classList.remove("card-oculta");
+    card.style.order = i;
+  });
+
+  Array.from(contenedor.querySelectorAll("[data-id]")).forEach(card => {
+    if (!idsVisibles.has(card.dataset.id)) card.classList.add("card-oculta");
+  });
+
+  sinResultados.classList.toggle("visible", productosFiltrados.length === 0);
+}
+
+// ===============================
+// HELPERS DOM
 // ===============================
 function abrirEditar(id) {
   const producto = productos.find(p => p.id === id);
@@ -259,7 +328,7 @@ function abrirEditar(id) {
 }
 
 function agregarCard(producto) {
-  const card = crearCard(producto, abrirEditar, alActualizarInline);
+  const card = crearCard(producto, abrirEditar, alActualizarInline, eliminarProductoHandler);
   card.classList.add("fade-in");
   contenedor.insertBefore(card, sinResultados);
 }
@@ -267,30 +336,46 @@ function agregarCard(producto) {
 function actualizarCard(producto) {
   const cardVieja = contenedor.querySelector(`[data-id="${producto.id}"]`);
   if (!cardVieja) return;
-
   const nuevaCard = crearCard(producto, abrirEditar, alActualizarInline);
-  nuevaCard.style.order = cardVieja.style.order; // mantener posición
+  nuevaCard.style.order = cardVieja.style.order;
   cardVieja.replaceWith(nuevaCard);
   nuevaCard.classList.add("flash");
   setTimeout(() => nuevaCard.classList.remove("flash"), 600);
 }
 
-// ===============================
-// ESTADÍSTICAS
-// ===============================
-function actualizarEstadisticas() {
+function reaplicarReglas(card, producto) {
+  const badge     = card.querySelector(".badge");
+  const btnAccion = card.querySelector(".btnAccion");
+
+  card.classList.remove("border-2","border-yellow-500","border-red-500","opacity-50");
+  badge.className   = "badge text-xs px-2 py-1 rounded-full";
+  badge.textContent = "Stock Normal";
+  badge.classList.add("bg-green-100","text-green-600");
+
+  btnAccion.disabled = false;
+  btnAccion.classList.remove("opacity-50","cursor-not-allowed");
+
+  if (producto.stock > 0 && producto.stock < 5) {
+    card.classList.add("border-2","border-yellow-500");
+    badge.textContent = "Stock Bajo";
+    badge.classList.replace("bg-green-100","bg-yellow-100");
+    badge.classList.replace("text-green-600","text-yellow-600");
+  }
+  if (producto.stock === 0) {
+    card.classList.add("border-2","border-red-500");
+    badge.textContent = "Agotado";
+    badge.classList.replace("bg-green-100","bg-red-100");
+    badge.classList.replace("text-green-600","text-red-600");
+    btnAccion.disabled = true;
+    btnAccion.classList.add("opacity-50","cursor-not-allowed");
+  }
   const hoy = new Date();
-
-  document.getElementById("totalProductos").textContent = productos.length;
-
-  document.getElementById("stockBajo").textContent =
-    productos.filter(p => p.stock > 0 && p.stock < 5).length;
-
-  document.getElementById("agotados").textContent =
-    productos.filter(p => p.stock === 0).length;
-
-  document.getElementById("vencidos").textContent =
-    productos.filter(p => new Date(p.fecha_vencimiento) < hoy).length;
+  if (new Date(producto.fecha_vencimiento) < hoy) {
+    card.classList.add("opacity-50");
+    badge.textContent = "Vencido";
+    badge.classList.replace("bg-green-100","bg-gray-200");
+    badge.classList.replace("text-green-600","text-gray-600");
+  }
 }
 
 // ===============================

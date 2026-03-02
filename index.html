@@ -5,6 +5,58 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sistema de Inventario</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* ── Skeleton para stat cards ── */
+    .sk-stat {
+      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 0.375rem;
+    }
+    @keyframes shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* ── Grid responsivo con soporte para CSS order ── */
+    #productosContainer > [data-id] {
+      flex: 1 1 calc(25% - 1.5rem);
+      min-width: 200px;
+      max-width: calc(25% - 1.5rem);
+    }
+    @media (max-width: 1024px) {
+      #productosContainer > [data-id] {
+        flex: 1 1 calc(50% - 1.5rem);
+        max-width: calc(50% - 1.5rem);
+      }
+    }
+    @media (max-width: 640px) {
+      #productosContainer > [data-id] {
+        flex: 1 1 100%;
+        max-width: 100%;
+      }
+    }
+    #sinResultados { flex: 1 1 100%; }
+
+    /* Skeleton cards mismo tamaño que productos */
+    #productosContainer > .skeleton-card {
+      flex: 1 1 calc(25% - 1.5rem);
+      min-width: 200px;
+      max-width: calc(25% - 1.5rem);
+    }
+    @media (max-width: 1024px) {
+      #productosContainer > .skeleton-card {
+        flex: 1 1 calc(50% - 1.5rem);
+        max-width: calc(50% - 1.5rem);
+      }
+    }
+    @media (max-width: 640px) {
+      #productosContainer > .skeleton-card {
+        flex: 1 1 100%;
+        max-width: 100%;
+      }
+    }
+  </style>
 </head>
 
 <body class="bg-gray-100 min-h-screen">
@@ -19,30 +71,54 @@
         </h1>
         <p class="text-gray-500 text-sm">Administración de productos</p>
       </div>
-      <button id="btnAgregar"
-        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow transition">
-        + Agregar Producto
-      </button>
+      <div class="flex gap-3">
+        <button id="btnVerReportes"
+          class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg shadow transition flex items-center gap-2">
+          📋 Ver Reportes
+        </button>
+        <button id="btnAgregar"
+          class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow transition">
+          + Agregar Producto
+        </button>
+      </div>
     </div>
 
     <!-- TARJETAS ESTADÍSTICAS -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <!-- Se usa grid de 5 columnas para incluir "Valor Total" -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+
       <div class="bg-white p-4 rounded-xl shadow">
         <p class="text-gray-500 text-sm">Total Productos</p>
-        <h2 id="totalProductos" class="text-2xl font-bold text-gray-800">0</h2>
+        <!-- Skeleton mientras carga, reemplazado por JS -->
+        <div id="totalProductos-sk" class="sk-stat h-8 w-12 mt-1"></div>
+        <h2 id="totalProductos" class="text-2xl font-bold text-gray-800 hidden">0</h2>
       </div>
+
       <div class="bg-white p-4 rounded-xl shadow">
         <p class="text-gray-500 text-sm">Stock Bajo</p>
-        <h2 id="stockBajo" class="text-2xl font-bold text-yellow-500">0</h2>
+        <div id="stockBajo-sk" class="sk-stat h-8 w-8 mt-1"></div>
+        <h2 id="stockBajo" class="text-2xl font-bold text-yellow-500 hidden">0</h2>
       </div>
+
       <div class="bg-white p-4 rounded-xl shadow">
         <p class="text-gray-500 text-sm">Agotados</p>
-        <h2 id="agotados" class="text-2xl font-bold text-gray-500">0</h2>
+        <div id="agotados-sk" class="sk-stat h-8 w-8 mt-1"></div>
+        <h2 id="agotados" class="text-2xl font-bold text-gray-500 hidden">0</h2>
       </div>
+
       <div class="bg-white p-4 rounded-xl shadow">
         <p class="text-gray-500 text-sm">Vencidos</p>
-        <h2 id="vencidos" class="text-2xl font-bold text-red-500">0</h2>
+        <div id="vencidos-sk" class="sk-stat h-8 w-8 mt-1"></div>
+        <h2 id="vencidos" class="text-2xl font-bold text-red-500 hidden">0</h2>
       </div>
+
+      <!-- ✅ NUEVA: Valor total del inventario -->
+      <div class="bg-white p-4 rounded-xl shadow col-span-2 md:col-span-1">
+        <p class="text-gray-500 text-sm">Valor Total</p>
+        <div id="valorTotal-sk" class="sk-stat h-8 w-24 mt-1"></div>
+        <h2 id="valorTotal" class="text-2xl font-bold text-blue-600 hidden">$0</h2>
+      </div>
+
     </div>
 
     <!-- BUSCADOR -->
@@ -62,7 +138,7 @@
     <!-- LEYENDA ESTADOS -->
     <div class="bg-white p-4 rounded-xl shadow mb-6">
       <h3 class="text-sm font-semibold text-gray-600 mb-3">Estados de los productos:</h3>
-      <div class="flex gap-6 text-sm">
+      <div class="flex flex-wrap gap-4 text-sm">
         <div class="flex items-center gap-2">
           <span class="w-3 h-3 bg-green-500 rounded-full"></span> Stock Normal
         </div>
@@ -78,46 +154,14 @@
       </div>
     </div>
 
-    <!--
-      IMPORTANTE: usar flex + flex-wrap en lugar de grid puro
-      para que CSS `order` funcione y reordene visualmente sin mover el DOM
-    -->
+    <!-- CONTENEDOR DE PRODUCTOS -->
     <div
       id="productosContainer"
       class="flex flex-wrap gap-6"
       style="align-items: start;"
-    >
-      <!-- Las cards se insertan aquí con width fijo para imitar el grid -->
-    </div>
+    ></div>
 
   </div>
-
-  <style>
-    /* Imitar grid de 4 columnas con flex */
-    #productosContainer > [data-id] {
-      flex: 1 1 calc(25% - 1.5rem);
-      min-width: 200px;
-      max-width: calc(25% - 1.5rem);
-    }
-
-    @media (max-width: 1024px) {
-      #productosContainer > [data-id] {
-        flex: 1 1 calc(50% - 1.5rem);
-        max-width: calc(50% - 1.5rem);
-      }
-    }
-
-    @media (max-width: 640px) {
-      #productosContainer > [data-id] {
-        flex: 1 1 100%;
-        max-width: 100%;
-      }
-    }
-
-    #sinResultados {
-      flex: 1 1 100%;
-    }
-  </style>
 
   <script type="module" src="./js/app.js"></script>
 </body>

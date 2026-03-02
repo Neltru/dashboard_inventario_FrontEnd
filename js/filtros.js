@@ -12,9 +12,9 @@ const estado = {
 // ── Callback para re-render (se inyecta desde app.js) ────
 let _onCambio = null;
 
-export function inicializarFiltros(productos, onCambio) {
+export function inicializarFiltros(productos, categoriasAPI, onCambio) {
   _onCambio = onCambio;
-  construirUI(productos);
+  construirUI(productos, categoriasAPI);
   bindEventos(productos);
 }
 
@@ -49,9 +49,13 @@ export function aplicarFiltros(productos) {
         return mult * (new Date(a.fecha_vencimiento) - new Date(b.fecha_vencimiento));
       }
       if (campo === "nombre") {
-        return mult * a.nombre.localeCompare(b.nombre);
+        const aVal = a.nombre ?? "";
+        const bVal = b.nombre ?? "";
+        return mult * aVal.localeCompare(bVal);
       }
-      return mult * (a[campo] - b[campo]); // precio, stock
+      const aVal = a[campo] ?? 0;
+      const bVal = b[campo] ?? 0;
+      return mult * (aVal - bVal); // precio, stock
     });
   }
 
@@ -61,10 +65,13 @@ export function aplicarFiltros(productos) {
 // ===============================
 // CONSTRUIR UI DE FILTROS
 // ===============================
-function construirUI(productos) {
+function construirUI(productos, categoriasAPI) {
 
-  // ── Obtener categorías únicas del array ──────────────────
-  const categorias = ["todas", ...new Set(productos.map(p => p.categoria))];
+  // ── Categorías: desde API o extraídas del array ──────────
+  const rawCats = Array.isArray(categoriasAPI) && categoriasAPI.length > 0
+    ? categoriasAPI.map(c => typeof c === "object" ? (c.nombre ?? c.name ?? c) : c)
+    : [...new Set(productos.map(p => p.categoria))];
+  const categorias = ["todas", ...rawCats];
 
   // ── Inyectar controles de filtro + orden ─────────────────
   // Los insertamos ANTES del contenedor de productos
