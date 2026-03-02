@@ -143,13 +143,47 @@ export function crearModal(onGuardar) {
         </div>
 
         <!-- URL imagen -->
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">URL de imagen</label>
-          <input id="campoImagen" type="url" placeholder="https://..."
-            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
-                   focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          <p class="text-xs text-gray-400 mt-1">Opcional. Se usará imagen por defecto si se deja vacío.</p>
+        <!-- DESPUÉS (poner esto): -->
+<div>
+  <label class="block text-sm font-medium text-gray-700 mb-1">Imagen del producto</label>
+
+  <!-- Zona de drop / click -->
+  <div id="zonaImagen"
+    class="relative border-2 border-dashed border-gray-300 rounded-xl p-4 text-center
+           cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition group">
+
+    <!-- Preview (oculto hasta que se seleccione) -->
+        <img id="previewImagen" src=""
+          class="hidden w-full h-36 object-cover rounded-lg mb-2" />
+
+        <!-- Placeholder -->
+        <div id="placeholderImagen" class="flex flex-col items-center gap-1 py-2">
+          <svg class="w-8 h-8 text-gray-300 group-hover:text-blue-400 transition"
+            fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M3 16.5V19a1 1 0 001 1h16a1 1 0 001-1v-2.5M16 10l-4-4m0 0L8 10m4-4v12"/>
+          </svg>
+          <p class="text-sm text-gray-400 group-hover:text-blue-500 transition">
+            Haz clic o arrastra una imagen aquí
+          </p>
+          <p class="text-xs text-gray-300">PNG, JPG, WEBP — máx. 5 MB</p>
         </div>
+
+        <!-- Input file oculto -->
+        <input id="campoImagen" type="file" accept="image/*"
+          class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+      </div>
+
+      <!-- Botón para quitar imagen seleccionada -->
+      <button id="btnQuitarImagen" type="button"
+        class="hidden mt-2 text-xs text-red-400 hover:text-red-600 transition">
+        ✕ Quitar imagen
+      </button>
+
+      <p class="text-xs text-gray-400 mt-1">
+        Opcional. Si no seleccionas ninguna, se usará una imagen por defecto.
+      </p>
+    </div>
 
       </div>
 
@@ -193,6 +227,66 @@ export function crearModal(onGuardar) {
   const proveedorError    = overlay.querySelector("#proveedorError");
   const infoProveedor     = overlay.querySelector("#infoProveedor");
   const btnReintentar     = overlay.querySelector("#btnReintentarProveedores");
+  // ── Imagen: referencias ──────────────────────────────────
+  const zonaImagen       = overlay.querySelector("#zonaImagen");
+  const previewImagen    = overlay.querySelector("#previewImagen");
+  const placeholderImg   = overlay.querySelector("#placeholderImagen");
+  const btnQuitarImagen  = overlay.querySelector("#btnQuitarImagen");
+  // Guarda el base64 o URL actual de la imagen
+  let imagenBase64 = null;
+
+// Mostrar preview cuando el usuario elige un archivo
+overlay.querySelector("#campoImagen").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) {
+    alert("La imagen no debe superar 5 MB.");
+    e.target.value = "";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    imagenBase64 = ev.target.result; // data:image/...;base64,...
+    mostrarPreview(imagenBase64);
+  };
+  reader.readAsDataURL(file);
+});
+
+// Drag & drop visual
+zonaImagen.addEventListener("dragover",  (e) => { e.preventDefault(); zonaImagen.classList.add("border-blue-400","bg-blue-50"); });
+zonaImagen.addEventListener("dragleave", ()  => { zonaImagen.classList.remove("border-blue-400","bg-blue-50"); });
+zonaImagen.addEventListener("drop", (e) => {
+  e.preventDefault();
+  zonaImagen.classList.remove("border-blue-400","bg-blue-50");
+  const file = e.dataTransfer.files[0];
+  if (!file || !file.type.startsWith("image/")) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    imagenBase64 = ev.target.result;
+    mostrarPreview(imagenBase64);
+  };
+  reader.readAsDataURL(file);
+});
+
+btnQuitarImagen.addEventListener("click", () => {
+  imagenBase64 = null;
+  overlay.querySelector("#campoImagen").value = "";
+  ocultarPreview();
+});
+
+function mostrarPreview(src) {
+  previewImagen.src = src;
+  previewImagen.classList.remove("hidden");
+  placeholderImg.classList.add("hidden");
+  btnQuitarImagen.classList.remove("hidden");
+}
+
+function ocultarPreview() {
+  previewImagen.src = "";
+  previewImagen.classList.add("hidden");
+  placeholderImg.classList.remove("hidden");
+  btnQuitarImagen.classList.add("hidden");
+}
 
   // Cache de proveedores para no re-fetchear en cada apertura
   let proveedoresCache = null;
@@ -302,41 +396,50 @@ export function crearModal(onGuardar) {
 
   // ── Cargar producto en modo edición ──────────────────────
   function cargarProducto(producto) {
-    titulo.textContent      = "Editar Producto";
-    campos.id.value         = producto.id;
-    campos.nombre.value     = producto.nombre;
-    campos.sku.value        = producto.sku;
-    campos.sku.disabled     = true;  // SKU no se puede editar
-    campos.categoria.value  = producto.categoria;
-    campos.stock.value      = producto.stock;
-    campos.precio.value     = producto.precio;
-    campos.fecha.value      = producto.fecha_vencimiento;
-    campos.imagen.value     = producto.imagen || "";
-
-    // Seleccionar el proveedor correcto una vez cargado el select
-    if (producto.proveedor_id) {
-      // Si el select ya tiene opciones, seleccionar de inmediato
-      if (campos.proveedor.options.length > 1) {
-        campos.proveedor.value = producto.proveedor_id;
-        campos.proveedor.dispatchEvent(new Event("change"));
-      } else {
-        // Esperar a que carguen los proveedores
-        const observer = new MutationObserver(() => {
-          if (campos.proveedor.options.length > 1) {
-            campos.proveedor.value = producto.proveedor_id;
-            campos.proveedor.dispatchEvent(new Event("change"));
-            observer.disconnect();
-          }
-        });
-        observer.observe(campos.proveedor, { childList: true });
-      }
-    }
+  titulo.textContent      = "Editar Producto";
+  campos.id.value         = producto.id;
+  campos.nombre.value     = producto.nombre;
+  campos.sku.value        = producto.sku;
+  campos.sku.disabled     = true;
+  campos.categoria.value  = producto.categoria;
+  campos.stock.value      = producto.stock;
+  campos.precio.value     = producto.precio;
+  campos.fecha.value      = producto.fecha_vencimiento;
+  // campos.imagen ya no es URL — mostramos el preview si hay imagen
+  if (producto.imagen && !producto.imagen.includes("placeholder")) {
+    imagenBase64 = producto.imagen; // puede ser base64 o URL externa
+    mostrarPreview(producto.imagen);
+  } else {
+    imagenBase64 = null;
+    ocultarPreview();
   }
 
-  function limpiarCampos() {
+  if (producto.proveedor_id) {
+    if (campos.proveedor.options.length > 1) {
+      campos.proveedor.value = producto.proveedor_id;
+      campos.proveedor.dispatchEvent(new Event("change"));
+    } else {
+      const observer = new MutationObserver(() => {
+        if (campos.proveedor.options.length > 1) {
+          campos.proveedor.value = producto.proveedor_id;
+          campos.proveedor.dispatchEvent(new Event("change"));
+          observer.disconnect();
+        }
+      });
+      observer.observe(campos.proveedor, { childList: true });
+    }
+  }
+}
+
+    function limpiarCampos() {
     titulo.textContent = "Agregar Producto";
-    campos.sku.disabled = false;  // SKU habilitado para nuevos productos
-    Object.values(campos).forEach(c => (c.value = ""));
+    campos.sku.disabled = false;
+    // Limpiar todos los campos excepto imagen (que es file, no tiene .value útil)
+    Object.entries(campos).forEach(([key, c]) => {
+      if (key !== "imagen") c.value = "";
+    });
+    imagenBase64 = null;
+    ocultarPreview();
     infoProveedor.classList.add("hidden");
   }
 
@@ -376,32 +479,29 @@ export function crearModal(onGuardar) {
   overlay.addEventListener("click", e => { if (e.target === overlay) cerrar(); });
 
   btnGuardar.addEventListener("click", () => {
-    if (!validar()) return;
+  if (!validar()) return;
 
-    // Mapear nombre de categoría a ID
-    const categoriasMap = {
-      "Tecnología": 1,
-      "Accesorios": 2,
-      "Ropa": 3,
-      "Hogar": 4,
-      "Alimentos": 5,
-    };
+  const categoriasMap = {
+    "Tecnología": 1, "Accesorios": 2,
+    "Ropa": 3,       "Hogar": 4,      "Alimentos": 5,
+  };
 
-    const producto = {
-      id                : campos.id.value ? parseInt(campos.id.value) : null,
-      nombre            : campos.nombre.value.trim(),
-      sku               : campos.sku.value.trim().toUpperCase(),
-      id_categoria      : categoriasMap[campos.categoria.value] || 1,  // Mapear a ID
-      stock             : parseInt(campos.stock.value),
-      precio            : parseFloat(campos.precio.value),
-      proveedor_id      : parseInt(campos.proveedor.value),   // ← relación por ID
-      fecha_vencimiento : campos.fecha.value,
-      imagen            : campos.imagen.value.trim() || "https://via.placeholder.com/300x200",
-    };
+  const producto = {
+    id                : campos.id.value ? parseInt(campos.id.value) : null,
+    nombre            : campos.nombre.value.trim(),
+    sku               : campos.sku.value.trim().toUpperCase(),
+    id_categoria      : categoriasMap[campos.categoria.value] || 1,
+    stock             : parseInt(campos.stock.value),
+    precio            : parseFloat(campos.precio.value),
+    proveedor_id      : parseInt(campos.proveedor.value),
+    fecha_vencimiento : campos.fecha.value,
+    imagen            : imagenBase64 || "https://placehold.co/300x200",
+    // ↑ base64 si se subió archivo, placeholder si no
+  };
 
-    onGuardar(producto);
-    cerrar();
-  });
+  onGuardar(producto);
+  cerrar();
+});
 
   // ── API pública ──────────────────────────────────────────
   return {

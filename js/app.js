@@ -47,6 +47,30 @@ import {
 // Array vivo de productos (se llena desde la API)
 let productos = [];
 
+// caché de URLs de imagen en localStorage para compensar API que no persiste
+const IMAGEN_CACHE_KEY = "productos_imagenes";
+function cargarCacheImagenes() {
+  try {
+    return JSON.parse(localStorage.getItem(IMAGEN_CACHE_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+function guardarCacheImagen(id, url) {
+  const cache = cargarCacheImagenes();
+  cache[id] = url;
+  localStorage.setItem(IMAGEN_CACHE_KEY, JSON.stringify(cache));
+}
+function aplicarCacheImagenes(lista) {
+  const cache = cargarCacheImagenes();
+  return lista.map(p => {
+    if (cache[p.id]) {
+      return { ...p, imagen: cache[p.id] };
+    }
+    return p;
+  });
+}
+
 const contenedor = document.getElementById("productosContainer");
 
 // ── Placeholder sin resultados ───────────────────────────
@@ -94,6 +118,12 @@ async function renderizarProductos() {
     productos = Array.isArray(productosData)
       ? productosData
       : (Array.isArray(productosData?.data) ? productosData.data : productosLocales);
+
+    // garantizar que cada producto tenga una imagen válida (fallback placeholder)
+    productos = productos.map(p => ({
+      ...p,
+      imagen: p.imagen || "https://placehold.co/300x200",
+    }));
 
     if (productosAPI.status === "rejected") {
       console.warn("⚠️ GET /api/productos falló, usando data.js local");
@@ -173,7 +203,7 @@ async function guardarProducto(producto) {
         precio:            respuesta.precio            ?? enviado.precio,
         fecha_vencimiento: respuesta.fecha_vencimiento || enviado.fecha_vencimiento,
         imagen:            respuesta.imagen            || enviado.imagen
-                           || "https://via.placeholder.com/300x200",
+                           || "https://placehold.co/300x200",
         proveedor_id:      respuesta.proveedor_id      || enviado.proveedor_id,
         proveedor_nombre:  respuesta.proveedor_nombre  || "",
       };

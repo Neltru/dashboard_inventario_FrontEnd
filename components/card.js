@@ -14,7 +14,7 @@ export function crearCard(producto, onEditar, onActualizar, onEliminar) {
       <span class="text-xs text-gray-300 select-none">✎ doble clic para editar</span>
     </div>
 
-    <img src="${producto.imagen}" class="rounded-lg mb-3 w-full h-40 object-cover" />
+    <img src="${producto.imagen || 'https://via.placeholder.com/300x200'}" class="rounded-lg mb-3 w-full h-40 object-cover" />
 
     <h2 class="inline-nombre font-semibold text-gray-800">${producto.nombre}</h2>
     <p class="text-xs text-gray-500">SKU: ${producto.sku || "N/A"}</p>
