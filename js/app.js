@@ -152,40 +152,58 @@ async function guardarProducto(producto) {
   try {
     let productoGuardado;
 
-    // etiquetas legibles para cada campo que podamos mostrar
+    const categoriasNombre = {
+      1: "Tecnología", 2: "Accesorios",
+      3: "Ropa",       4: "Hogar",      5: "Alimentos",
+    };
+
+    // Mezcla lo enviado + respuesta de la API, resolviendo campos con nombres distintos
+    function normalizar(enviado, respuesta) {
+      return {
+        ...enviado,   // base con todos los campos correctos
+        ...respuesta, // sobreescribe con datos reales (ej: el id asignado)
+        // Campos que la API puede devolver diferente:
+        categoria: respuesta.categoria
+          || categoriasNombre[respuesta.id_categoria]
+          || categoriasNombre[enviado.id_categoria]
+          || enviado.categoria || "",
+        nombre:            respuesta.nombre            || enviado.nombre,
+        sku:               respuesta.sku               || enviado.sku,
+        stock:             respuesta.stock             ?? enviado.stock,
+        precio:            respuesta.precio            ?? enviado.precio,
+        fecha_vencimiento: respuesta.fecha_vencimiento || enviado.fecha_vencimiento,
+        imagen:            respuesta.imagen            || enviado.imagen
+                           || "https://via.placeholder.com/300x200",
+        proveedor_id:      respuesta.proveedor_id      || enviado.proveedor_id,
+        proveedor_nombre:  respuesta.proveedor_nombre  || "",
+      };
+    }
+
     const etiquetasCampos = {
-      nombre: "Nombre",
-      precio: "Precio",
-      stock: "Stock",
-      fecha_vencimiento: "Fecha de vencimiento",
-      sku: "SKU",
-      categoria: "Categoría",
-      proveedor_id: "Proveedor",
-      imagen: "Imagen",
+      nombre: "Nombre", precio: "Precio", stock: "Stock",
+      fecha_vencimiento: "Fecha de vencimiento", sku: "SKU",
+      categoria: "Categoría", proveedor_id: "Proveedor", imagen: "Imagen",
     };
 
     if (producto.id === null) {
-      // ── POST /api/productos ───────────────────────────
-      productoGuardado = await crearProducto(producto);
+      const respuesta = await crearProducto(producto);
+      productoGuardado = normalizar(producto, respuesta);
       productos.push(productoGuardado);
       agregarCard(productoGuardado);
-      toast.exito(`"${productoGuardado.nombre || producto.nombre || 'Producto'}" agregado correctamente.`);
+      toast.exito(`"${productoGuardado.nombre || 'Producto'}" agregado correctamente.`);
 
     } else {
-      // ── PUT /api/productos/:id ────────────────────────
-      productoGuardado = await editarProducto(producto.id, producto);
+      const respuesta = await editarProducto(producto.id, producto);
+      productoGuardado = normalizar(producto, respuesta);
       const idx = productos.findIndex(p => p.id === productoGuardado.id);
       if (idx !== -1) productos[idx] = productoGuardado;
       actualizarCard(productoGuardado);
 
-      // si sólo se modificó un campo, mostrar su etiqueta en lugar del nombre
       const camposCambiados = Object.keys(producto).filter(k => producto[k] !== productoGuardado[k]);
       if (camposCambiados.length === 1) {
-        const campo = camposCambiados[0];
-        const etiqueta = etiquetasCampos[campo] || campo;
-        toast.exito(`${etiqueta} actualizado correctamente.`);
+        toast.exito(`${etiquetasCampos[camposCambiados[0]] || camposCambiados[0]} actualizado correctamente.`);
       } else {
-        toast.exito(`"${productoGuardado.nombre || producto.nombre || 'Producto'}" actualizado correctamente.`);
+        toast.exito(`"${productoGuardado.nombre || 'Producto'}" actualizado correctamente.`);
       }
     }
   } catch (err) {

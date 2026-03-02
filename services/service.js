@@ -144,7 +144,7 @@ export async function obtenerProveedores() {
 // → Registrar movimiento de stock
 // ===============================
 export async function registrarMovimiento(id, stockAnterior, stockNuevo) {
-  return request(`${API}/reportes`, {
+  return request(`${API}/reportes/movimientos`, {
     method: "POST",
     body  : JSON.stringify({
       producto_id   : id,
