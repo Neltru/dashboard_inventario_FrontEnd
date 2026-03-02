@@ -13,29 +13,35 @@ const API = `${BASE_URL}/api`;
 
 // ── Helper interno: fetch + manejo de errores ────────────
 async function request(url, options = {}) {
-  const response = await fetch(url, {
-    headers: {
-      "Content-Type"   : "application/json",
-      "Accept"         : "application/json",
-      "ngrok-skip-browser-warning": "true",  // evita la pantalla de advertencia de ngrok
-    },
-    mode: "cors",
-    ...options,
-  });
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "Content-Type"   : "application/json",
+        "Accept"         : "application/json",
+        "ngrok-skip-browser-warning": "true",  // evita la pantalla de advertencia de ngrok
+      },
+      mode: "cors",
+      ...options,
+    });
 
-  if (!response.ok) {
-    const msg = await response.text().catch(() => response.statusText);
-    throw new Error(`[${response.status}] ${msg}`);
+    if (!response.ok) {
+      const msg = await response.text().catch(() => response.statusText);
+      throw new Error(`[${response.status}] ${msg}`);
+    }
+
+    // Validar que la respuesta sea JSON y no HTML
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json")) {
+      const text = await response.text();
+      throw new Error(`Respuesta inesperada (no es JSON): ${text.slice(0, 80)}`);
+    }
+
+    return response.json();
+  } catch (err) {
+    // redondear y mejorar mensaje para problemas de red / CORS
+    console.error(`[service.request] error fetching ${url}`, err);
+    throw new Error(`Error de red al solicitar ${url}: ${err.message}`);
   }
-
-  // Validar que la respuesta sea JSON y no HTML
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) {
-    const text = await response.text();
-    throw new Error(`Respuesta inesperada (no es JSON): ${text.slice(0, 80)}`);
-  }
-
-  return response.json();
 }
 
 // ===============================
@@ -123,7 +129,14 @@ export async function eliminarProducto(id) {
 // → Solo si el formulario tiene campo proveedor
 // ===============================
 export async function obtenerProveedores() {
-  return request(`${API}/proveedores`);
+  try {
+    return await request(`${API}/proveedores`);
+  } catch (err) {
+    // Si hay error de red o servidor, devolvemos array vacío para que la UI
+    // pueda mostrar el mensaje de error sin quebrar la lógica del llamado.
+    console.error("obtenerProveedores error:", err);
+    return [];
+  }
 }
 
 // ===============================

@@ -45,7 +45,7 @@ export function crearCard(producto, onEditar, onActualizar, onEliminar) {
         <span class="font-semibold">Precio:</span>
         <span class="inline-precio">$${producto.precio}</span>
       </p>
-      <p><span class="font-semibold">Vence:</span> ${producto.fecha_vencimiento}</p>
+      <p><span class="font-semibold">Vence:</span> <span class="inline-fecha-vencimiento">${producto.fecha_vencimiento || "N/A"}</span></p>
     </div>
 
     <div class="flex gap-2 mt-4">
@@ -165,7 +165,7 @@ function aplicarReglasDinamicas(card, producto) {
     badge.classList.add("bg-red-100","text-red-600");
   }
 
-  if (new Date(producto.fecha_vencimiento) < hoy) {
+  if (producto.fecha_vencimiento && new Date(producto.fecha_vencimiento) < hoy) {
     card.classList.add("opacity-50");
     badge.textContent = "Vencido";
     badge.classList.remove("bg-green-100","text-green-600");

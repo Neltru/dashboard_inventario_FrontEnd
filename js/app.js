@@ -152,12 +152,24 @@ async function guardarProducto(producto) {
   try {
     let productoGuardado;
 
+    // etiquetas legibles para cada campo que podamos mostrar
+    const etiquetasCampos = {
+      nombre: "Nombre",
+      precio: "Precio",
+      stock: "Stock",
+      fecha_vencimiento: "Fecha de vencimiento",
+      sku: "SKU",
+      categoria: "Categoría",
+      proveedor_id: "Proveedor",
+      imagen: "Imagen",
+    };
+
     if (producto.id === null) {
       // ── POST /api/productos ───────────────────────────
       productoGuardado = await crearProducto(producto);
       productos.push(productoGuardado);
       agregarCard(productoGuardado);
-      toast.exito(`"${productoGuardado.nombre}" agregado correctamente.`);
+      toast.exito(`"${productoGuardado.nombre || producto.nombre || 'Producto'}" agregado correctamente.`);
 
     } else {
       // ── PUT /api/productos/:id ────────────────────────
@@ -165,18 +177,23 @@ async function guardarProducto(producto) {
       const idx = productos.findIndex(p => p.id === productoGuardado.id);
       if (idx !== -1) productos[idx] = productoGuardado;
       actualizarCard(productoGuardado);
-      toast.exito(`"${productoGuardado.nombre}" actualizado correctamente.`);
+
+      // si sólo se modificó un campo, mostrar su etiqueta en lugar del nombre
+      const camposCambiados = Object.keys(producto).filter(k => producto[k] !== productoGuardado[k]);
+      if (camposCambiados.length === 1) {
+        const campo = camposCambiados[0];
+        const etiqueta = etiquetasCampos[campo] || campo;
+        toast.exito(`${etiqueta} actualizado correctamente.`);
+      } else {
+        toast.exito(`"${productoGuardado.nombre || producto.nombre || 'Producto'}" actualizado correctamente.`);
+      }
     }
-
-    const resultado = aplicarFiltros(productos);
-    onFiltrosCambian(resultado);
-    actualizarEstadisticas();
-
   } catch (err) {
     console.error("Error al guardar:", err);
     toast.error("No se pudo guardar el producto. Revisa tu conexión.");
   }
 }
+
 
 // ===============================
 // ELIMINAR PRODUCTO
@@ -231,11 +248,11 @@ async function alActualizarInline(id, campo, nuevoValor, elemento, textoOriginal
     elemento.classList.add("inline-ok");
     setTimeout(() => elemento.classList.remove("inline-ok"), 800);
 
-    const etiquetas = { nombre: "Nombre", precio: "Precio", stock: "Stock" };
+    const etiquetas = { nombre: "Nombre", precio: "Precio", stock: "Stock", fecha_vencimiento: "Fecha de vencimiento" };
     const sufijo = tieneAPI ? "" : " (pendiente de guardar con Editar)";
     toast.exito(`${etiquetas[campo] ?? campo} actualizado.${sufijo}`, 2500);
 
-    if (campo === "stock" && producto) {
+    if ((campo === "stock" || campo === "fecha_vencimiento") && producto) {
       const card = contenedor.querySelector(`[data-id="${id}"]`);
       if (card) reaplicarReglas(card, producto);
     }
@@ -345,15 +362,23 @@ function actualizarCard(producto) {
 
 function reaplicarReglas(card, producto) {
   const badge     = card.querySelector(".badge");
-  const btnAccion = card.querySelector(".btnAccion");
+  const btnAccion = card.querySelector(".btnEditar");
+  const fechaElem = card.querySelector(".inline-fecha-vencimiento");
+
+  // Actualizar fecha de vencimiento en tiempo real
+  if (fechaElem) {
+    fechaElem.textContent = producto.fecha_vencimiento || "N/A";
+  }
 
   card.classList.remove("border-2","border-yellow-500","border-red-500","opacity-50");
   badge.className   = "badge text-xs px-2 py-1 rounded-full";
   badge.textContent = "Stock Normal";
   badge.classList.add("bg-green-100","text-green-600");
 
-  btnAccion.disabled = false;
-  btnAccion.classList.remove("opacity-50","cursor-not-allowed");
+  if (btnAccion) {
+    btnAccion.disabled = false;
+    btnAccion.classList.remove("opacity-50","cursor-not-allowed");
+  }
 
   if (producto.stock > 0 && producto.stock < 5) {
     card.classList.add("border-2","border-yellow-500");
@@ -366,11 +391,13 @@ function reaplicarReglas(card, producto) {
     badge.textContent = "Agotado";
     badge.classList.replace("bg-green-100","bg-red-100");
     badge.classList.replace("text-green-600","text-red-600");
-    btnAccion.disabled = true;
-    btnAccion.classList.add("opacity-50","cursor-not-allowed");
+    if (btnAccion) {
+      btnAccion.disabled = true;
+      btnAccion.classList.add("opacity-50","cursor-not-allowed");
+    }
   }
   const hoy = new Date();
-  if (new Date(producto.fecha_vencimiento) < hoy) {
+  if (producto.fecha_vencimiento && new Date(producto.fecha_vencimiento) < hoy) {
     card.classList.add("opacity-50");
     badge.textContent = "Vencido";
     badge.classList.replace("bg-green-100","bg-gray-200");
