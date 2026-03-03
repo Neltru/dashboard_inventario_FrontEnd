@@ -456,21 +456,34 @@ function ocultarPreview() {
     overlay.querySelector(`#error${mensajeId}`).classList.remove("hidden");
   }
 
+  // ── Validación de campos antes de guardar ─────────────────
   function validar() {
     limpiarErrores();
-    let ok = true;
 
-    if (!campos.nombre.value.trim())                          { mostrarError("nombre",    "Nombre");    ok = false; }
-    if (!campos.sku.value.trim())                             { mostrarError("sku",       "Sku");       ok = false; }
-    if (!campos.categoria.value)                              { mostrarError("categoria", "Categoria"); ok = false; }
-    if (campos.stock.value === "" || parseInt(campos.stock.value) < 0)
-                                                              { mostrarError("stock",     "Stock");     ok = false; }
-    if (!campos.precio.value || parseFloat(campos.precio.value) <= 0)
-                                                              { mostrarError("precio",    "Precio");    ok = false; }
-    if (!campos.proveedor.value)                              { mostrarError("proveedor", "Proveedor"); ok = false; }
-    if (!campos.fecha.value)                                  { mostrarError("fecha",     "Fecha");     ok = false; }
+    const stockSeguro     = Number(campos.stock.value);
+    const precioSeguro    = Number(campos.precio.value);
+    const proveedorSeguro = Number(campos.proveedor.value);
 
-    return ok;
+    let esValido = true;
+
+    if (!Number.isFinite(stockSeguro) || stockSeguro <= 0) {
+      mostrarError("stock", "Stock");
+      esValido = false;
+    }
+
+    if (!Number.isFinite(precioSeguro) || precioSeguro <= 0) {
+      mostrarError("precio", "Precio");
+      esValido = false;
+    }
+
+    if (!Number.isFinite(proveedorSeguro) || proveedorSeguro <= 0) {
+      mostrarError("proveedor", "Proveedor");
+      esValido = false;
+    }
+
+    if (!esValido) return null;
+
+    return { stockSeguro, precioSeguro, proveedorSeguro };
   }
 
   // ── Eventos ──────────────────────────────────────────────
@@ -479,29 +492,31 @@ function ocultarPreview() {
   overlay.addEventListener("click", e => { if (e.target === overlay) cerrar(); });
 
   btnGuardar.addEventListener("click", () => {
-  if (!validar()) return;
+    const resultado = validar();
+    if (!resultado) return;
 
-  const categoriasMap = {
-    "Tecnología": 1, "Accesorios": 2,
-    "Ropa": 3,       "Hogar": 4,      "Alimentos": 5,
-  };
+    const { stockSeguro, precioSeguro, proveedorSeguro } = resultado;
 
-  const producto = {
-    id                : campos.id.value ? parseInt(campos.id.value) : null,
-    nombre            : campos.nombre.value.trim(),
-    sku               : campos.sku.value.trim().toUpperCase(),
-    id_categoria      : categoriasMap[campos.categoria.value] || 1,
-    stock             : parseInt(campos.stock.value),
-    precio            : parseFloat(campos.precio.value),
-    proveedor_id      : parseInt(campos.proveedor.value),
-    fecha_vencimiento : campos.fecha.value,
-    imagen            : imagenBase64 || "https://placehold.co/300x200",
-    // ↑ base64 si se subió archivo, placeholder si no
-  };
+    const categoriasMap = {
+      "Tecnología": 1, "Accesorios": 2,
+      "Ropa": 3,       "Hogar": 4,      "Alimentos": 5,
+    };
 
-  onGuardar(producto);
-  cerrar();
-});
+    const producto = {
+      id                : campos.id.value ? Number(campos.id.value) : null,
+      nombre            : campos.nombre.value.trim(),
+      sku               : campos.sku.value.trim().toUpperCase(),
+      id_categoria      : categoriasMap[campos.categoria.value] || 1,
+      stock             : stockSeguro,
+      precio            : precioSeguro,
+      proveedor_id      : proveedorSeguro,
+      fecha_vencimiento : campos.fecha.value,
+      imagen            : imagenBase64 || "https://placehold.co/300x200.jpg",
+    };
+
+    onGuardar(producto);
+    cerrar();
+  });
 
   // ── API pública ──────────────────────────────────────────
   return {

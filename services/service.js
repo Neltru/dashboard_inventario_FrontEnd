@@ -160,15 +160,13 @@ export async function registrarMovimiento(id, stockAnterior, stockNuevo) {
 // → Historial de movimientos de stock
 // ===============================
 export async function obtenerMovimientos() {
-  // Temporalmente usando datos locales mientras se implementa la API
-  // TODO: cambiar a return request(`${API}/reportes`) cuando el endpoint esté listo
-  
-  const { movimientos } = await import("../js/data-reportes.js");
-  
-  // Simular delay de red
-  return new Promise(resolve => {
-    setTimeout(() => {
-      resolve(movimientos);
-    }, 500);
-  });
+  try {
+    // GET /api/reportes/movimientos
+    return await request(`${API}/reportes/movimientos`);
+  } catch (err) {
+    // Fallback a datos locales si la API no está disponible
+    console.warn("obtenerMovimientos: usando fallback local por error de API:", err);
+    const { movimientos } = await import("../js/data-reportes.js");
+    return movimientos;
+  }
 }

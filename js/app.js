@@ -125,6 +125,9 @@ async function renderizarProductos() {
       imagen: p.imagen || "https://placehold.co/300x200",
     }));
 
+    // Aplicar caché local de imágenes (base64) por id
+    productos = aplicarCacheImagenes(productos);
+
     if (productosAPI.status === "rejected") {
       console.warn("⚠️ GET /api/productos falló, usando data.js local");
     }
@@ -186,6 +189,7 @@ async function guardarProducto(producto) {
       1: "Tecnología", 2: "Accesorios",
       3: "Ropa",       4: "Hogar",      5: "Alimentos",
     };
+    
 
     // Mezcla lo enviado + respuesta de la API, resolviendo campos con nombres distintos
     function normalizar(enviado, respuesta) {
@@ -203,7 +207,7 @@ async function guardarProducto(producto) {
         precio:            respuesta.precio            ?? enviado.precio,
         fecha_vencimiento: respuesta.fecha_vencimiento || enviado.fecha_vencimiento,
         imagen:            respuesta.imagen            || enviado.imagen
-                           || "https://placehold.co/300x200",
+                           || "https://placehold.co/300x200.jpg",
         proveedor_id:      respuesta.proveedor_id      || enviado.proveedor_id,
         proveedor_nombre:  respuesta.proveedor_nombre  || "",
       };
@@ -214,10 +218,44 @@ async function guardarProducto(producto) {
       fecha_vencimiento: "Fecha de vencimiento", sku: "SKU",
       categoria: "Categoría", proveedor_id: "Proveedor", imagen: "Imagen",
     };
+    producto.stock = Number(producto.stock);
+    producto.precio = Number(producto.precio);
+
+    // Si la imagen viene como base64 (data URL), NO la enviamos al backend
+    // (muchos APIs/BD no aceptan strings tan grandes en este campo).
+    // La persistimos en localStorage usando el id retornado por la API.
+    const imagenOriginal = producto.imagen;
+    const esImagenBase64 =
+      typeof imagenOriginal === "string" && imagenOriginal.startsWith("data:image/");
+    if (esImagenBase64) {
+      producto.imagen = "https://placehold.co/300x200.jpg";
+    }
+
+    if (isNaN(producto.stock) || producto.stock <= 0) {
+      toast.error("El stock debe ser un número mayor a 0.");
+      return;
+    }
+
+    if (isNaN(producto.precio) || producto.precio <= 0) {
+      toast.error("El precio debe ser un número mayor a 0.");
+      return;
+    }
+
+    // Debug: ver exactamente qué se envía al backend
+    console.log("DEBUG guardarProducto payload:", {
+      ...producto,
+      imagen_es_base64: esImagenBase64,
+      stock_tipo  : typeof producto.stock,
+      precio_tipo : typeof producto.precio,
+    });
 
     if (producto.id === null) {
       const respuesta = await crearProducto(producto);
       productoGuardado = normalizar(producto, respuesta);
+      if (esImagenBase64 && productoGuardado?.id != null) {
+        guardarCacheImagen(productoGuardado.id, imagenOriginal);
+        productoGuardado.imagen = imagenOriginal;
+      }
       productos.push(productoGuardado);
       agregarCard(productoGuardado);
       toast.exito(`"${productoGuardado.nombre || 'Producto'}" agregado correctamente.`);
@@ -225,6 +263,10 @@ async function guardarProducto(producto) {
     } else {
       const respuesta = await editarProducto(producto.id, producto);
       productoGuardado = normalizar(producto, respuesta);
+      if (esImagenBase64 && productoGuardado?.id != null) {
+        guardarCacheImagen(productoGuardado.id, imagenOriginal);
+        productoGuardado.imagen = imagenOriginal;
+      }
       const idx = productos.findIndex(p => p.id === productoGuardado.id);
       if (idx !== -1) productos[idx] = productoGuardado;
       actualizarCard(productoGuardado);
