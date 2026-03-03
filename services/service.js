@@ -161,12 +161,19 @@ export async function registrarMovimiento(id, stockAnterior, stockNuevo) {
 // ===============================
 export async function obtenerMovimientos() {
   try {
-    // GET /api/reportes/movimientos
+    // 1) Intentar endpoint recomendado: GET /api/reportes/movimientos
     return await request(`${API}/reportes/movimientos`);
-  } catch (err) {
-    // Fallback a datos locales si la API no está disponible
-    console.warn("obtenerMovimientos: usando fallback local por error de API:", err);
-    const { movimientos } = await import("../js/data-reportes.js");
-    return movimientos;
+  } catch (errPrimario) {
+    console.warn("obtenerMovimientos: error en /reportes/movimientos, probando /reportes:", errPrimario);
+
+    try {
+      // 2) Fallback a GET /api/reportes (endpoint alterno)
+      return await request(`${API}/reportes`);
+    } catch (errSecundario) {
+      // 3) Fallback final: datos locales
+      console.warn("obtenerMovimientos: usando fallback local por error de API:", errSecundario);
+      const { movimientos } = await import("../js/data-reportes.js");
+      return movimientos;
+    }
   }
 }
