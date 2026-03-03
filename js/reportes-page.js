@@ -140,18 +140,14 @@ let _tipoActivo     = "todos";
 // ===============================
 async function cargarMovimientos() {
   mostrarEstado("skeleton");
-
-  // Animación del icono refresh
   const icono = document.getElementById("iconoRefresh");
   icono?.classList.add("animate-spin");
 
   try {
-    _movimientos = await obtenerMovimientos();
+    const respuesta = await obtenerMovimientos();
     
-    // Validar que sea array
-    if (!Array.isArray(_movimientos)) {
-      _movimientos = Array.isArray(_movimientos?.data) ? _movimientos.data : [];
-    }
+    // La API devuelve { data: [...] }
+    _movimientos = Array.isArray(respuesta) ? respuesta : (respuesta?.data ?? []);
     
     renderizarTabla(filtrar(_movimientos));
     mostrarEstado("tabla");
@@ -250,7 +246,7 @@ function renderizarTabla(movimientos) {
           </span>
         </td>
         <td class="px-4 py-3 text-gray-700 font-medium">
-          ${m.nombre_producto ?? `#${m.id_producto}`}
+          ${m.producto ?? `#${m.producto_id}`}
         </td>
         <td class="px-4 py-3 text-right ${cantidadColor}">${cantidadTexto}</td>
         <td class="px-4 py-3 text-right text-gray-500">${m.stock_anterior}</td>
